@@ -1,0 +1,197 @@
+import matplotlib.pyplot as plt 
+import numpy as np
+import os
+from scipy.optimize import curve_fit
+
+
+sample='SA323'
+dot='2'
+
+#path where the folder with the data files is located
+path = r'C:\Users\gunde\OneDrive\Documents\Uni\Masterarbeit\Data\\'+sample+r'\PCFS_'+dot
+binningmask=np.loadtxt(path+r'\Binningmask.bm', delimiter=',', skiprows=2)
+#readin pcfs data
+#argument: directory of folder in which the data files can be found
+#returns an array of all curves
+#the first 2 will be ignored, as they are within the two pulses of the laser (12,5ps)
+def read_pcfs(directory):
+    files=os.listdir(directory+r'\PCFSCurves')
+    number=len(files)-2
+    data=[]
+    for i in range(number):
+        data.append(np.loadtxt(directory+r'\PCFSCurves\PCFS_'+str(i+2)+'.dat', delimiter='\t', skiprows=2))
+    return data
+
+graphs=read_pcfs(path)
+
+
+    
+def gaussian(x, amp, cen, wid):
+    return amp * np.exp(-np.log(2)*((x-cen)/wid)**2)  
+
+def lorentz(x, amp, cen, wid):
+    return amp/(1+((x-cen)/wid)**2)
+
+def fit_func(x, amp, cen, wid, eta):
+    return eta*lorentz(x,amp,cen,wid)+(1-eta)*gaussian(x,amp,cen,wid)
+    
+
+#plot the g2(pos) of the n´th dataset 
+def plot_g2 (n):
+    pos=[]
+    g2=[]
+    g2err=[]
+
+    for i in range(len(graphs[n])):
+        pos.append(graphs[n][i][0])
+    
+    for i in range(len(graphs[n])):
+        g2.append(graphs[n][i][3])
+        
+    for i in range(len(graphs[n])):
+        g2err.append(graphs[n][i][4])
+    
+    plt.errorbar(pos,g2, g2err)
+    plt.xlabel('Position[mm]')
+    plt.ylabel('g2')
+    plt.title('g2-funcion')
+
+
+#plot the lineshape of the n´th curve and fit it with a pseudo-voigt/gauss  (for now) 
+def fit_pE(n):
+    E=[]
+    pE=[]
+    
+    for i in range(len(graphs[n])):
+        E.append(graphs[n][i][5])
+    
+    for i in range(len(graphs[n])):
+        pE.append(graphs[n][i][6])
+        
+    plt.plot(E,pE)
+    E0=E.index(0)
+    del E[E0]
+    del pE[E0]
+    init_vals=[1,0,1]
+    best_vals, covar=curve_fit(gaussian, E, pE, p0=init_vals)
+    print(best_vals)
+    plt.plot(E, gaussian(E, best_vals[0], best_vals[1], best_vals[2]))
+
+    
+    plt.xlabel('\u03B5')
+    plt.ylabel('\u03C1(\u03B5)')
+    plt.title('Energy')
+    plt.xlim(-100,100)
+    
+    
+    
+
+
+#plot the figure with 6 g2 plots of the file in the directory
+def plot_figure_g2(directory):
+    plt.figure(figsize=(22,15))
+    sublist=graphs[::(len(graphs)-1)//6+1]
+
+   
+    for n in range(len(sublist)):
+        x=n+1
+        ax=plt.subplot(2,3,x)
+        pos=[]
+        g2=[]
+        g2err=[]
+        
+        for i in range(len(sublist[n])):
+            pos.append(sublist[n][i][0])
+    
+        for i in range(len(sublist[n])):
+            g2.append(sublist[n][i][3])
+        
+        for i in range(len(sublist[n])):
+            g2err.append(sublist[n][i][4])
+    
+        #ax.errorbar(pos,g2, g2err)
+        ax.plot(pos,g2)
+        if(n==3):    
+            ax.set_xlabel('Position[mm]', fontsize=20)
+        elif(n==4):
+            ax.set_xlabel('Position[mm]', fontsize=20)
+        elif(n==5):
+            ax.set_xlabel('Position[mm]', fontsize=20)
+        else:
+            ax.set_xlabel('')
+            
+        if(n==0):
+            ax.set_ylabel('g2', fontsize=20)
+        elif(n==3):
+            ax.set_ylabel('g2', fontsize=20)
+        else:
+            ax.set_ylabel('')
+           
+        tau=str(int((binningmask[n*((len(binningmask)-1)//6+1)][1])/1000))
+        ax.set_title(tau+' ns', fontsize=30)
+        
+#plot the Lineshape         
+def plot_figure_pE(directory):
+    plt.figure(figsize=(22,15))
+    sublist=graphs[::(len(graphs)-1)//6+1]
+
+    for n in range(len(sublist)):
+        x=n+1
+        ax=plt.subplot(2,3,x)
+        E=[]
+        pE=[]
+        pEerr=[]
+        
+        for i in range(len(sublist[n])):
+            E.append(sublist[n][i][5])
+    
+        for i in range(len(sublist[n])):
+            pE.append(sublist[n][i][6])
+        
+        for i in range(len(sublist[n])):
+            pEerr.append(sublist[n][i][7])
+    
+        #ax.errorbar(E, pE, pEerr)
+        ax.plot(E,pE, label='data')
+        
+        E0=E.index(0)
+        del E[E0]
+        del pE[E0]
+        
+        init_vals=[100,0,10,0.5]
+        best_vals, covar=curve_fit(fit_func, E, pE, p0=init_vals)
+        #print(best_vals)
+        E2 = np.arange(-100,100,0.1)
+        plt.plot(E2, fit_func(E2, best_vals[0], best_vals[1], best_vals[2], best_vals[3]),'--r', label='pseudo-voigt')
+        
+        if(n==3):    
+            ax.set_xlabel('\u03B5[\u03BCeV]', fontsize=20)
+        elif(n==4):
+            ax.set_xlabel('\u03B5[\u03BCeV]', fontsize=20)
+        elif(n==5):
+            ax.set_xlabel('\u03B5[\u03BCeV]', fontsize=20)
+        else:
+            ax.set_xlabel('')
+            
+        if(n==0):
+            ax.set_ylabel('\u03C1(\u03B5)', fontsize=20)
+        elif(n==3):
+            ax.set_ylabel('\u03C1(\u03B5)', fontsize=20)
+        else:
+            ax.set_ylabel('')
+           
+        bin=str(int((binningmask[n*((len(binningmask)-1)//6+1)][1])/1000))
+        ax.set_title(bin+' ns', fontsize=30)
+        temp= "%.2f" % (best_vals[2]*2)
+        ax.text(6, best_vals[0]*0.8, 'FWHM='+str(temp)+'\u03BCeV', size=18)
+        ax.set_xlim(-50,50)
+        ax.legend(loc='upper left', fontsize=15)
+        
+
+if not(os.path.isdir(path+r'\graphs')):
+    os.mkdir(path+r'\Graphs') 
+       
+plot_figure_g2(path)
+plt.savefig(path+r'\Graphs\g2.png')
+fig_lineshape=plot_figure_pE(path)
+plt.savefig(path+r'\graphs\lineshape.png')
